@@ -1,0 +1,8 @@
+{
+  "test_accuracy": 1.0,
+  "cv_mean_accuracy": 1.0,
+  "cv_std": 0.0,
+  "n_samples": 4920,
+  "n_symptoms": 132,
+  "n_diseases": 41
+}
