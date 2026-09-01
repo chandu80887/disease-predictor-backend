@@ -6,7 +6,7 @@ Endpoints:
   GET  /                      -> health check
   GET  /symptoms               -> list all valid symptoms (for Android dropdown/checklist UI)
   POST /predict                -> {"symptoms": ["itching","skin_rash"]} or {"text": "stomach ache, tired"}
-  GET  /disease/<name>/info    -> description, precautions, medications, diet, workout for a disease
+  GET  /disease/<name>/info    -> description, precautions, medications, diet, workout, doctor for a disease
 """
 
 from flask import Flask, request, jsonify
@@ -28,8 +28,66 @@ diets_df = pd.read_csv("data/diets.csv")
 workout_df = pd.read_csv("data/workout_df.csv")
 
 
+# ---------- Doctor recommendation mapping ----------
+# Keys must exactly match the "Disease" values used in description_df / precautions_df
+# (same casing/spelling your model outputs). If a disease is predicted but not listed
+# here, DOCTOR_MAP.get() below falls back to "General Physician" instead of crashing.
+DOCTOR_MAP = {
+    "Fungal infection": "Dermatologist",
+    "Allergy": "Allergist / Immunologist",
+    "GERD": "Gastroenterologist",
+    "Chronic cholestasis": "Hepatologist / Gastroenterologist",
+    "Drug Reaction": "Allergist / Immunologist",
+    "Peptic ulcer disease": "Gastroenterologist",
+    "AIDS": "Infectious Disease Specialist",
+    "Diabetes": "Endocrinologist",
+    "Gastroenteritis": "Gastroenterologist",
+    "Bronchial Asthma": "Pulmonologist",
+    "Hypertension": "Cardiologist",
+    "Migraine": "Neurologist",
+    "Cervical spondylosis": "Orthopedician",
+    "Paralysis (brain hemorrhage)": "Neurologist",
+    "Jaundice": "Hepatologist / Gastroenterologist",
+    "Malaria": "General Physician",
+    "Chicken pox": "Dermatologist / General Physician",
+    "Dengue": "General Physician",
+    "Typhoid": "General Physician",
+    "hepatitis A": "Hepatologist",
+    "Hepatitis B": "Hepatologist",
+    "Hepatitis C": "Hepatologist",
+    "Hepatitis D": "Hepatologist",
+    "Hepatitis E": "Hepatologist",
+    "Alcoholic hepatitis": "Hepatologist",
+    "Tuberculosis": "Pulmonologist",
+    "Common Cold": "General Physician",
+    "Pneumonia": "Pulmonologist",
+    "Dimorphic hemmorhoids(piles)": "Proctologist / General Surgeon",
+    "Heart attack": "Cardiologist",
+    "Varicose veins": "Vascular Surgeon",
+    "Hypothyroidism": "Endocrinologist",
+    "Hyperthyroidism": "Endocrinologist",
+    "Hypoglycemia": "Endocrinologist",
+    "Osteoarthristis": "Orthopedician",
+    "Arthritis": "Rheumatologist",
+    "(vertigo) Paroymsal Positional Vertigo": "ENT Specialist",
+    "Acne": "Dermatologist",
+    "Urinary tract infection": "Urologist",
+    "Psoriasis": "Dermatologist",
+    "Impetigo": "Dermatologist",
+}
+DEFAULT_DOCTOR = "General Physician"
+
+
+def get_recommended_doctor(disease_name: str) -> str:
+    """Looks up the recommended specialist for a predicted disease.
+    Falls back to General Physician if the disease isn't in the map,
+    so this never throws even if a disease name doesn't match exactly."""
+    return DOCTOR_MAP.get(disease_name, DEFAULT_DOCTOR)
+
+
 def get_disease_info(disease_name: str) -> dict:
-    """Pulls description, precautions, medications, diet, and workout for one disease."""
+    """Pulls description, precautions, medications, diet, workout, and
+    recommended doctor for one disease."""
     info = {"disease": disease_name}
 
     desc_row = description_df[description_df["Disease"] == disease_name]
@@ -71,6 +129,9 @@ def get_disease_info(disease_name: str) -> dict:
     else:
         info["workout"] = []
 
+    # NEW: recommended doctor specialty for this disease
+    info["recommended_doctor"] = get_recommended_doctor(disease_name)
+
     return info
 
 
@@ -79,7 +140,7 @@ def health_check():
     return jsonify({
         "status": "ok",
         "service": "AI-Powered Symptom-Based Disease Prediction System",
-        "endpoints": ["/symptoms", "/predict (POST)", "/disease/<name>/info"]
+        "endpoints": ["/symptoms", "/predict (POST)", "/disease/<name>/info", "/disease/<name>/doctor"]
     })
 
 
@@ -98,7 +159,8 @@ def predict():
       {"symptoms": ["itching", "skin_rash", "fatigue"]}   <- exact keys, from checkbox UI
       {"text": "stomach ache, throwing up, tired"}         <- free text, from voice input
 
-    Returns prediction + top matches + full disease info for the top prediction.
+    Returns prediction + top matches + full disease info (including recommended_doctor)
+    for the top prediction.
     """
     body = request.get_json(force=True, silent=True) or {}
 
@@ -129,6 +191,7 @@ def predict():
         "prediction": result["prediction"],
         "confidence": result["confidence"],
         "top_matches": result["top_matches"],
+        "recommended_doctor": disease_info["recommended_doctor"],  # NEW: also surfaced at top level
         "info": disease_info
     })
 
@@ -141,8 +204,12 @@ def disease_info_endpoint(name):
     return jsonify(info)
 
 
+@app.route("/disease/<name>/doctor", methods=["GET"])
+def disease_doctor_endpoint(name):
+    """NEW: standalone lookup, handy for testing the mapping directly,
+    e.g. GET /disease/Migraine/doctor"""
+    return jsonify({"disease": name, "recommended_doctor": get_recommended_doctor(name)})
+
+
 if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 5000))
-    debug_mode = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
-    app.run(host="0.0.0.0", port=port, debug=debug_mode)
+    app.run(host="0.0.0.0", port=5000, debug=True)
