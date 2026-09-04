@@ -44,6 +44,8 @@ SYNONYMS = {
     "runny nose": "continuous sneezing",
     "high temperature": "high fever",
     "temperature": "mild fever",
+    "fever": "mild fever",              # NEW: plain "fever" now maps to mild_fever
+    "feaver": "mild fever",             # NEW: common typo/mishearing
     "cant breathe": "breathlessness",
     "can't breathe": "breathlessness",
     "shortness of breath": "breathlessness",
@@ -58,6 +60,7 @@ SYNONYMS = {
     "yellow skin": "yellowish skin",
     "dizzy": "dizziness",
     "headache": "headache",
+    "head ache": "headache",            # NEW: two-word phrasing now matches
     "sore throat": "throat irritation",
 }
 
@@ -141,6 +144,7 @@ if __name__ == "__main__":
         "stomach ache, throwing up and tired",
         "hedache, feaver, cofh",
         "yellow eyes, dark urine",
+        "fever, head ache",
     ]
     for t in tests:
         print(f"\nInput: {t}")
