@@ -32,6 +32,11 @@ diets_df = pd.read_csv("data/diets.csv")
 workout_df = pd.read_csv("data/workout_df.csv")
 
 
+# ---------- Load translations for Hindi and Kannada ----------
+with open("translations.json", "r", encoding="utf-8") as f:
+    TRANSLATIONS = json.load(f)
+
+
 # ---------- Doctor recommendation mapping ----------
 # Keys must exactly match the "Disease" values used in description_df / precautions_df
 # (same casing/spelling your model outputs). If a disease is predicted but not listed
@@ -51,7 +56,7 @@ DOCTOR_MAP = {
     "Migraine": "Neurologist",
     "Cervical spondylosis": "Orthopedician",
     "Paralysis (brain hemorrhage)": "Neurologist",
-    "Jaundice": "Hepatologist / Gastroenterologist",
+    "Jaundice": "Hepatologist",
     "Malaria": "General Physician",
     "Chicken pox": "Dermatologist / General Physician",
     "Dengue": "General Physician",
@@ -160,11 +165,13 @@ def get_symptoms():
 def predict():
     """
     Accepts either:
-      {"symptoms": ["itching", "skin_rash", "fatigue"]}   <- exact keys, from checkbox UI
-      {"text": "stomach ache, throwing up, tired"}         <- free text, from voice input
+      {"symptoms": ["itching", "skin_rash", "fatigue"], "language": "hi"}   <- exact keys, from checkbox UI
+      {"text": "stomach ache, throwing up, tired", "language": "kn"}         <- free text, from voice input
 
-    Returns prediction + top matches + full disease info (including recommended_doctor)
-    for the top prediction.
+    Language options: "en" (English), "hi" (Hindi), "kn" (Kannada)
+    Defaults to "en" if not specified.
+
+    Returns prediction in both English and localized language.
     """
     body = request.get_json(force=True, silent=True) or {}
 
@@ -189,13 +196,26 @@ def predict():
     result = predict_disease(matched_symptoms, top_n=3)
     disease_info = get_disease_info(result["prediction"])
 
+    # Get language from request (default to English)
+    language = body.get("language", "en")
+    
+    # Get localized names for disease and doctor
+    disease_name_en = result["prediction"]
+    disease_name_local = TRANSLATIONS["diseases"].get(disease_name_en, {}).get(language, disease_name_en)
+    
+    doctor_name_en = disease_info["recommended_doctor"]
+    doctor_name_local = TRANSLATIONS["doctors"].get(doctor_name_en, {}).get(language, doctor_name_en)
+
     return jsonify({
         "matched_symptoms": matched_symptoms,
         "unmatched_input": unmatched,
         "prediction": result["prediction"],
+        "prediction_local": disease_name_local,
         "confidence": result["confidence"],
         "top_matches": result["top_matches"],
-        "recommended_doctor": disease_info["recommended_doctor"],  # NEW: also surfaced at top level
+        "recommended_doctor": disease_info["recommended_doctor"],
+        "recommended_doctor_local": doctor_name_local,
+        "language": language,
         "info": disease_info
     })
 
@@ -203,6 +223,16 @@ def predict():
 @app.route("/disease/<name>/info", methods=["GET"])
 def disease_info_endpoint(name):
     info = get_disease_info(name)
+    
+    # Add localized disease and doctor names
+    language = request.args.get("language", "en")
+    disease_local = TRANSLATIONS["diseases"].get(name, {}).get(language, name)
+    doctor_local = TRANSLATIONS["doctors"].get(info.get("recommended_doctor", ""), {}).get(language, info.get("recommended_doctor", ""))
+    
+    info["disease_local"] = disease_local
+    info["recommended_doctor_local"] = doctor_local
+    info["language"] = language
+    
     if info["description"] == "No description available.":
         return jsonify({"error": f"'{name}' not found. Check exact spelling/casing from a /predict response."}), 404
     return jsonify(info)
@@ -212,7 +242,18 @@ def disease_info_endpoint(name):
 def disease_doctor_endpoint(name):
     """NEW: standalone lookup, handy for testing the mapping directly,
     e.g. GET /disease/Migraine/doctor"""
-    return jsonify({"disease": name, "recommended_doctor": get_recommended_doctor(name)})
+    doctor_en = get_recommended_doctor(name)
+    
+    # Add localized doctor name
+    language = request.args.get("language", "en")
+    doctor_local = TRANSLATIONS["doctors"].get(doctor_en, {}).get(language, doctor_en)
+    
+    return jsonify({
+        "disease": name,
+        "recommended_doctor": doctor_en,
+        "recommended_doctor_local": doctor_local,
+        "language": language
+    })
 
 
 # ============================================================
