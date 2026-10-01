@@ -1618,5 +1618,27 @@ def get_nearby_hospitals():
         return jsonify({"error": str(e)}), 500
 
 
+# ============================================================
+# SOS AMBULANCE DEMO LOGGING (SIMULATION ONLY)
+# ============================================================
+# The Android app calls this when the demo "SOS - Call Ambulance"
+# button is tapped. It only logs the request. No ambulance is
+# booked and no external service is contacted.
+# ============================================================
+
+@app.route("/sos-log", methods=["POST"])
+def sos_log():
+    from datetime import datetime  # local import, so no other edit is needed at the top
+    body = request.get_json(force=True, silent=True) or {}
+    lat = body.get("lat")
+    lon = body.get("lon")
+    print(f"[SOS-DEMO] {datetime.utcnow().isoformat()}Z lat={lat} lon={lon}", flush=True)
+    return jsonify({
+        "status": "logged",
+        "mode": "simulation",
+        "note": "Demo only. No real ambulance was dispatched."
+    }), 200
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
