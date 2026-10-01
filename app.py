@@ -1630,9 +1630,12 @@ def get_nearby_hospitals():
 def sos_log():
     from datetime import datetime  # local import, so no other edit is needed at the top
     body = request.get_json(force=True, silent=True) or {}
-    lat = body.get("lat")
-    lon = body.get("lon")
-    print(f"[SOS-DEMO] {datetime.utcnow().isoformat()}Z lat={lat} lon={lon}", flush=True)
+    print(
+        f"[SOS-DEMO] {datetime.utcnow().isoformat()}Z "
+        f"lat={body.get('lat')} lon={body.get('lon')} "
+        f"disease={body.get('disease')} hospital={body.get('hospital')}",
+        flush=True
+    )
     return jsonify({
         "status": "logged",
         "mode": "simulation",
